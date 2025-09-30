@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const planets = [
   { name: "Ferengi", radius: 500, speed: -1, color: "hsl(215 20.2% 65.1%)" },
@@ -34,6 +34,7 @@ export default function SolarSystem({ day }: SolarSystemProps) {
   const [alignSunT, setAlignSun] = useState(0);
   const [alignT, setAlign] = useState(0);
   const [sunInT, setSunInT] = useState(0);
+  const [sunOutT, setSunOutT] = useState(0);
 
   const planetPositions: PlanetPosition[] = planets.map(planet => {
     const angle = ((day * planet.speed * Math.PI) / 180);
@@ -47,13 +48,24 @@ export default function SolarSystem({ day }: SolarSystemProps) {
     Math.abs(planetPositions[0].angleRad - planetPositions[1].angleRad) < 0.05 &&
     Math.abs(planetPositions[1].angleRad - planetPositions[2].angleRad) < 0.05;
 
-  const x1 = (planetPositions[2].y - planetPositions[0].y) / (planetPositions[2].x - planetPositions[0].x);
-  const x2 = (planetPositions[1].y - planetPositions[0].y) / (planetPositions[1].x - planetPositions[0].x);
-  const arePlanetsAligned: boolean = Math.abs(x1 - x2) < 0.15 && !arePlanetsAlignedSun;
+  {/*
+  const pend1 = (planetPositions[2].y - planetPositions[0].y) / (planetPositions[2].x - planetPositions[0].x);
+  const pend2 = (planetPositions[1].y - planetPositions[0].y) / (planetPositions[1].x - planetPositions[0].x);
+  const arePlanetsAligned: boolean = Math.abs(pend1 - pend2) < 0.2 && !arePlanetsAlignedSun;
+  */}
+
+  const aSide = Math.sqrt(Math.pow((planetPositions[0].x)-(planetPositions[1].x), 2) + Math.pow((planetPositions[0].y)-(planetPositions[1].y), 2))
+  const bSide = Math.sqrt(Math.pow((planetPositions[1].x)-(planetPositions[2].x), 2) + Math.pow((planetPositions[1].y)-(planetPositions[2].y), 2))
+  const cSide = Math.sqrt(Math.pow((planetPositions[2].x)-(planetPositions[0].x), 2) + Math.pow((planetPositions[2].y)-(planetPositions[0].y), 2))
+  const perimeter = (aSide + bSide + cSide);
+  const s = (perimeter/2)
+
+  const arePlanetsAligned: boolean = Math.sqrt((s)*(s-aSide)*(s-bSide)*(s-cSide)) < 50000 && !arePlanetsAlignedSun;
 
   const sign = (p: {x: number, y: number}, pA: PlanetPosition, pB: PlanetPosition) => {
     return (pB.x - pA.x) * (p.y - pA.y) - (pB.y - pA.y) * (p.x - pA.x);
   };
+  
 
   const d1 = sign({x: SVG_SIZE / 2, y: SVG_SIZE / 2}, planetPositions[0], planetPositions[1]);
   const d2 = sign({x: SVG_SIZE / 2, y: SVG_SIZE / 2}, planetPositions[1], planetPositions[2]);
@@ -64,33 +76,51 @@ export default function SolarSystem({ day }: SolarSystemProps) {
 
 
   const isSunInT = !( negativeT && positiveT );
+
+  const onDrought = useRef(arePlanetsAlignedSun);
+  const onRain = useRef(isSunInT);
+  const onOptimum = useRef(arePlanetsAligned);
+  const onNormal = useRef(!arePlanetsAlignedSun && !arePlanetsAligned && !isSunInT);
   
   useEffect(() => {
-    if (arePlanetsAlignedSun) {
-      setAlignSun(prevCount => prevCount + 1); 
-    } else if (arePlanetsAligned) {
+    if (arePlanetsAlignedSun && onDrought.current) {
+      setAlignSun(prevCount => prevCount + 1);
+      onDrought.current = false;
+      onRain.current = true;
+      onNormal.current = true;
+      onNormal.current = true;
+    } else if (arePlanetsAligned && onOptimum.current) {
       setAlign(prevCount => prevCount + 1);
-    } else if (isSunInT) {
-      setSunInT(prevCount => prevCount + 1); 
-    } else {
+      onOptimum.current = false;
+      onRain.current = true;
+      onNormal.current = true;
+      onDrought.current = true;
+    } else if (isSunInT && onRain.current && !arePlanetsAlignedSun) {
+      setSunInT(prevCount => prevCount + 1);
+      onRain.current = false;
+      onNormal.current = true;
+      onDrought.current = true;
+      onOptimum.current = true;
+    } else if (!isSunInT && onNormal.current && !arePlanetsAligned && !arePlanetsAlignedSun) {
+      setSunOutT(prevCount => prevCount + 1);
+      onNormal.current = false;
+      onDrought.current = true;
+      onOptimum.current = true;
+      onRain.current = true;
     }
   }, [day, arePlanetsAligned, arePlanetsAlignedSun, isSunInT]);
 
   if (arePlanetsAlignedSun) {
     lineColor = "hsl(48, 100%, 50%)";
   } else if (arePlanetsAligned) {
-    lineColor = "hsla(0, 66%, 53%, 1.00)";
+    lineColor = "hsla(133, 81%, 56%, 1.00)";
   } else if (isSunInT) {
-    lineColor = "hsla(155, 52%, 56%, 1.00)";
+    lineColor = "hsla(216, 76%, 53%, 1.00)";
   } else {
-    lineColor = "hsla(214, 49%, 63%, 1.00)";  
+    lineColor = "hsla(214, 34%, 73%, 1.00)";  
   }
 
-  const aSide = Math.sqrt(Math.pow((planetPositions[0].x)-(planetPositions[1].x), 2) + Math.pow((planetPositions[0].y)-(planetPositions[1].y), 2))
-  const bSide = Math.sqrt(Math.pow((planetPositions[1].x)-(planetPositions[2].x), 2) + Math.pow((planetPositions[1].y)-(planetPositions[2].y), 2))
-  const cSide = Math.sqrt(Math.pow((planetPositions[2].x)-(planetPositions[0].x), 2) + Math.pow((planetPositions[2].y)-(planetPositions[0].y), 2))
-  const perimeter = (aSide + bSide + cSide);
-
+  
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
@@ -171,14 +201,19 @@ export default function SolarSystem({ day }: SolarSystemProps) {
             Clima: ¡Alineación planetaria con el Sol! Sequia por <strong>{alignSunT}</strong> vez.
           </p>
         )}
-        {arePlanetsAligned && (
-          <p className="mt-2 text-red-400 font-bold">
-            Clima: ¡Alineación planetaria con sin el Sol! Buen clima <strong>{alignT}</strong> vez.
+        {(arePlanetsAligned && !arePlanetsAlignedSun) &&(
+          <p className="mt-2 text-green-400 font-bold">
+            Clima: ¡Alineación planetaria sin el Sol! Buen clima <strong>{alignT}</strong> vez.
           </p>
         )}
-        {isSunInT && (
-          <p className="mt-2 text-yellow-400 font-bold">
+        {(isSunInT && !arePlanetsAlignedSun)&& (
+          <p className="mt-2 text-blue-400 font-bold">
             Clima: ¡Sol dentro de triangulo! Tormentas por <strong>{sunInT}</strong> vez de magnitud <strong>{perimeter}</strong> .
+          </p>
+        )}
+        {(!isSunInT && !arePlanetsAlignedSun && !arePlanetsAligned) &&(
+          <p className="mt-2 text-gray-400 font-bold">
+            Clima: ¡Sol fuera de triangulo! Normalidad de presion y temperatura por <strong>{sunOutT}</strong> vez .
           </p>
         )}
       </div>
