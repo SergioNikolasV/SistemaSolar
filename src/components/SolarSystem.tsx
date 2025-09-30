@@ -25,11 +25,13 @@ interface rect {
 
 interface SolarSystemProps {
   day: number;
+  onClimateUpdate: (counts: { sequia: number; optimo: number; lluvia: number; normal: number }) => void;
+  onDayReport: (report: { dia: number; clima: string }) => void;
 }
 
 let lineColor: string;
 
-export default function SolarSystem({ day }: SolarSystemProps) {
+export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarSystemProps) {
   
   const [alignSunT, setAlignSun] = useState(0);
   const [alignT, setAlign] = useState(0);
@@ -85,29 +87,39 @@ export default function SolarSystem({ day }: SolarSystemProps) {
   useEffect(() => {
     if (arePlanetsAlignedSun && onDrought.current) {
       setAlignSun(prevCount => prevCount + 1);
+      onDayReport({ dia: day, clima: "Sequia" })
       onDrought.current = false;
       onRain.current = true;
       onNormal.current = true;
       onNormal.current = true;
     } else if (arePlanetsAligned && onOptimum.current) {
       setAlign(prevCount => prevCount + 1);
+      onDayReport({ dia: day, clima: "Optimo" })
       onOptimum.current = false;
       onRain.current = true;
       onNormal.current = true;
       onDrought.current = true;
     } else if (isSunInT && onRain.current && !arePlanetsAlignedSun) {
       setSunInT(prevCount => prevCount + 1);
+      onDayReport({ dia: day, clima: "Tormenta" })
       onRain.current = false;
       onNormal.current = true;
       onDrought.current = true;
       onOptimum.current = true;
     } else if (!isSunInT && onNormal.current && !arePlanetsAligned && !arePlanetsAlignedSun) {
       setSunOutT(prevCount => prevCount + 1);
+      onDayReport({ dia: day, clima: "Normal" })
       onNormal.current = false;
       onDrought.current = true;
       onOptimum.current = true;
       onRain.current = true;
     }
+    onClimateUpdate({
+      sequia: alignSunT,
+      optimo: alignT,
+      lluvia: sunInT,
+      normal: sunOutT,
+    });
   }, [day, arePlanetsAligned, arePlanetsAlignedSun, isSunInT]);
 
   if (arePlanetsAlignedSun) {
