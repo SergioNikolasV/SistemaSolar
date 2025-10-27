@@ -1,83 +1,39 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-
-const planets = [
-  { name: "Ferengi", radius: 500, speed: -1, color: "hsl(215 20.2% 65.1%)" },
-  { name: "Vulcano", radius: 1000, speed: 5, color: "hsl(24.6 95% 53.1%)" },
-  { name: "Betazoide", radius: 2000, speed: -3, color: "hsl(142.1 70.6% 45.3%)" },
-];
-const SVG_SIZE = 5000;
-
-interface PlanetPosition {
-  name: string;
-  radius: number;
-  speed: number;
-  color: string;
-  x: number;
-  y: number;
-  angleRad: number;
-}
-
-interface rect {
-  x1: number;
-  x2: number
-}
+import { Planet as PlanetType, BASE_PLANETS } from "@/lib/planets";
+import { 
+  SVG_SIZE, 
+  PlanetPosition, 
+  calculatePlanetPositions, 
+  arePlanetsAlignedWithSun, 
+  arePlanetsAligned as checkPlanetsAligned, 
+  isSunInTriangle, 
+  calculateTrianglePerimeter 
+} from "@/lib/planetUtils";
 
 interface SolarSystemProps {
   day: number;
-  onClimateUpdate: (counts: { sequia: number; optimo: number; lluvia: number; normal: number }) => void;
+  onClimateUpdate: (counts: { sequia: number | "N/A"; optimo: number | "N/A"; lluvia: number | "N/A"; normal: number | "N/A" }) => void;
   onDayReport: (report: { dia: number; clima: string }) => void;
+  planets?: PlanetType[];
+  isBaseCase?: boolean;
 }
 
 let lineColor: string;
 
-export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarSystemProps) {
+export default function SolarSystem({ day, onClimateUpdate, onDayReport, planets = BASE_PLANETS, isBaseCase = true}: SolarSystemProps) {
   
   const [alignSunT, setAlignSun] = useState(0);
   const [alignT, setAlign] = useState(0);
   const [sunInT, setSunInT] = useState(0);
   const [sunOutT, setSunOutT] = useState(0);
 
-  const planetPositions: PlanetPosition[] = planets.map(planet => {
-    const angle = ((day * planet.speed * Math.PI) / 180);
-    const angleRad = Math.abs((angle)%(Math.PI));
-    const x = SVG_SIZE / 2 + planet.radius * Math.cos(angle);
-    const y = SVG_SIZE / 2 + planet.radius * Math.sin(angle);
-    return { ...planet, x, y, angleRad};
-  });
-
-  const arePlanetsAlignedSun  = 
-    Math.abs(planetPositions[0].angleRad - planetPositions[1].angleRad) < 0.05 &&
-    Math.abs(planetPositions[1].angleRad - planetPositions[2].angleRad) < 0.05;
-
-  {/*
-  const pend1 = (planetPositions[2].y - planetPositions[0].y) / (planetPositions[2].x - planetPositions[0].x);
-  const pend2 = (planetPositions[1].y - planetPositions[0].y) / (planetPositions[1].x - planetPositions[0].x);
-  const arePlanetsAligned: boolean = Math.abs(pend1 - pend2) < 0.2 && !arePlanetsAlignedSun;
-  */}
-
-  const aSide = Math.sqrt(Math.pow((planetPositions[0].x)-(planetPositions[1].x), 2) + Math.pow((planetPositions[0].y)-(planetPositions[1].y), 2))
-  const bSide = Math.sqrt(Math.pow((planetPositions[1].x)-(planetPositions[2].x), 2) + Math.pow((planetPositions[1].y)-(planetPositions[2].y), 2))
-  const cSide = Math.sqrt(Math.pow((planetPositions[2].x)-(planetPositions[0].x), 2) + Math.pow((planetPositions[2].y)-(planetPositions[0].y), 2))
-  const perimeter = (aSide + bSide + cSide);
-  const s = (perimeter/2)
-
-  const arePlanetsAligned: boolean = Math.sqrt((s)*(s-aSide)*(s-bSide)*(s-cSide)) < 50000 && !arePlanetsAlignedSun;
-
-  const sign = (p: {x: number, y: number}, pA: PlanetPosition, pB: PlanetPosition) => {
-    return (pB.x - pA.x) * (p.y - pA.y) - (pB.y - pA.y) * (p.x - pA.x);
-  };
-  
-
-  const d1 = sign({x: SVG_SIZE / 2, y: SVG_SIZE / 2}, planetPositions[0], planetPositions[1]);
-  const d2 = sign({x: SVG_SIZE / 2, y: SVG_SIZE / 2}, planetPositions[1], planetPositions[2]);
-  const d3 = sign({x: SVG_SIZE / 2, y: SVG_SIZE / 2}, planetPositions[2], planetPositions[0]);
-
-  const negativeT= (d1 < 0) || (d2 < 0) || (d3 < 0);
-  const positiveT= (d1 > 0) || (d2 > 0) || (d3 > 0);
-
-
-  const isSunInT = !( negativeT && positiveT );
+  // Usar las funciones utilitarias para cálculos dinámicos
+  const planetPositions = calculatePlanetPositions(planets, day);
+  const arePlanetsAlignedSun = arePlanetsAlignedWithSun(planetPositions);
+  const arePlanetsAligned = checkPlanetsAligned(planetPositions);
+  const isSunInT = isSunInTriangle(planetPositions);
+  const perimeter = calculateTrianglePerimeter(planetPositions);
 
   const onDrought = useRef(arePlanetsAlignedSun);
   const onRain = useRef(isSunInT);
@@ -85,6 +41,9 @@ export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarS
   const onNormal = useRef(!arePlanetsAlignedSun && !arePlanetsAligned && !isSunInT);
   
   useEffect(() => {
+    // If not base case, do not update climate counters or reports; rely on parent to set N/A
+    if (!isBaseCase) return;
+
     if (arePlanetsAlignedSun && onDrought.current) {
       setAlignSun(prevCount => prevCount + 1);
       onDayReport({ dia: day, clima: "Sequia" })
@@ -120,16 +79,20 @@ export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarS
       lluvia: sunInT,
       normal: sunOutT,
     });
-  }, [day, arePlanetsAligned, arePlanetsAlignedSun, isSunInT]);
+  }, [day, arePlanetsAligned, arePlanetsAlignedSun, isSunInT, isBaseCase]);
 
-  if (arePlanetsAlignedSun) {
-    lineColor = "hsl(48, 100%, 50%)";
-  } else if (arePlanetsAligned) {
-    lineColor = "hsla(133, 81%, 56%, 1.00)";
-  } else if (isSunInT) {
-    lineColor = "hsla(216, 76%, 53%, 1.00)";
+  if (isBaseCase) {
+    if (arePlanetsAlignedSun) {
+      lineColor = "hsl(48, 100%, 50%)";
+    } else if (arePlanetsAligned) {
+      lineColor = "hsla(133, 81%, 56%, 1.00)";
+    } else if (isSunInT) {
+      lineColor = "hsla(216, 76%, 53%, 1.00)";
+    } else {
+      lineColor = "hsla(214, 34%, 73%, 1.00)";  
+    }
   } else {
-    lineColor = "hsla(214, 34%, 73%, 1.00)";  
+    lineColor = "hsla(214, 34%, 73%, 1.00)"; // Color por defecto para configuraciones personalizadas
   }
 
   
@@ -150,7 +113,7 @@ export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarS
           <circle cx={SVG_SIZE / 2} cy={SVG_SIZE / 2} r={250} fill="yellow" />
 
           {/*LineasSol*/}
-          {planetPositions.map(p => (
+          {isBaseCase && planetPositions.map(p => (
             <line
               key={`line-${p.name}`}
               x1={SVG_SIZE / 2}
@@ -168,33 +131,37 @@ export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarS
           ))}
 
           {/*LineasTriangulo*/}
-          <line
-            key={`lineTriangle1-${planetPositions[0].name} ${planetPositions[1].name}`}
-            x1= {planetPositions[0].x}
-            y1= {planetPositions[0].y}
-            x2= {planetPositions[1].x}
-            y2= {planetPositions[1].y}
-            stroke={lineColor}
-            strokeWidth="5"
-          />
-          <line
-            key={`lineTriangle2-${planetPositions[1].name} ${planetPositions[2].name}`}
-            x1= {planetPositions[1].x}
-            y1= {planetPositions[1].y}
-            x2= {planetPositions[2].x}
-            y2= {planetPositions[2].y}
-            stroke={lineColor}
-            strokeWidth="5"
-          />
-          <line
-            key={`lineTriangle3-${planetPositions[2].name} ${planetPositions[0].name}`}
-            x1= {planetPositions[2].x}
-            y1= {planetPositions[2].y}
-            x2= {planetPositions[0].x}
-            y2= {planetPositions[0].y}
-            stroke={lineColor}
-            strokeWidth="5"
-          />
+          {isBaseCase && planetPositions.length >= 3 && (
+            <>
+              <line
+                key={`lineTriangle1-${planetPositions[0].name}-${planetPositions[1].name}`}
+                x1= {planetPositions[0].x}
+                y1= {planetPositions[0].y}
+                x2= {planetPositions[1].x}
+                y2= {planetPositions[1].y}
+                stroke={lineColor}
+                strokeWidth="5"
+              />
+              <line
+                key={`lineTriangle2-${planetPositions[1].name}-${planetPositions[2].name}`}
+                x1= {planetPositions[1].x}
+                y1= {planetPositions[1].y}
+                x2= {planetPositions[2].x}
+                y2= {planetPositions[2].y}
+                stroke={lineColor}
+                strokeWidth="5"
+              />
+              <line
+                key={`lineTriangle3-${planetPositions[2].name}-${planetPositions[0].name}`}
+                x1= {planetPositions[2].x}
+                y1= {planetPositions[2].y}
+                x2= {planetPositions[0].x}
+                y2= {planetPositions[0].y}
+                stroke={lineColor}
+                strokeWidth="5"
+              />
+            </>
+          )}
         </svg>
       </div>
 
@@ -208,22 +175,22 @@ export default function SolarSystem({ day, onClimateUpdate, onDayReport}: SolarS
             </li>
           ))}
         </ul>
-        {arePlanetsAlignedSun && (
+        {isBaseCase && arePlanetsAlignedSun && (
           <p className="mt-2 text-yellow-400 font-bold">
             Clima: ¡Alineación planetaria con el Sol! Sequia por <strong>{alignSunT}</strong> vez.
           </p>
         )}
-        {(arePlanetsAligned && !arePlanetsAlignedSun) &&(
+        {isBaseCase && (arePlanetsAligned && !arePlanetsAlignedSun) &&(
           <p className="mt-2 text-green-400 font-bold">
             Clima: ¡Alineación planetaria sin el Sol! Buen clima <strong>{alignT}</strong> vez.
           </p>
         )}
-        {(isSunInT && !arePlanetsAlignedSun)&& (
+        {isBaseCase && (isSunInT && !arePlanetsAlignedSun)&& (
           <p className="mt-2 text-blue-400 font-bold">
             Clima: ¡Sol dentro de triangulo! Tormentas por <strong>{sunInT}</strong> vez de magnitud <strong>{perimeter}</strong> .
           </p>
         )}
-        {(!isSunInT && !arePlanetsAlignedSun && !arePlanetsAligned) &&(
+        {isBaseCase && (!isSunInT && !arePlanetsAlignedSun && !arePlanetsAligned) &&(
           <p className="mt-2 text-gray-400 font-bold">
             Clima: ¡Sol fuera de triangulo! Normalidad de presion y temperatura por <strong>{sunOutT}</strong> vez .
           </p>
